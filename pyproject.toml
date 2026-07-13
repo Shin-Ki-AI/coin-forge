@@ -1,0 +1,57 @@
+[project]
+name = "coinforge"
+version = "0.1.0"
+description = "Coin Forge — 업비트 BTC-KRW 4H 기계적 자동매매 시스템 (Python)"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "pydantic>=2.5",
+    "pydantic-settings>=2.1",
+    "requests>=2.31",
+    "PyJWT>=2.8",
+    "websockets>=12.0",
+    "pymongo>=4.6",
+    "apscheduler>=3.10",
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+    "mypy>=1.9",
+]
+
+[project.scripts]
+coinforge-trader = "coinforge.cli.trader:main"
+coinforge-backtest = "coinforge.cli.backtest:main"
+coinforge-api = "coinforge.cli.api:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["coinforge*"]
+
+[tool.setuptools.package-data]
+coinforge = ["api/static/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true

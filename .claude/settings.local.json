@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go version *)",
+      "Bash(docker --version)",
+      "Bash([ -f \"$MEM\" ])",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\신기\\\\Desktop\\\\mcp\\\\coin-forge-backup-20260705\\\\coin-forge\"; $env:PYTHONPATH=\".\"; $env:TRADING_MODE=\"paper\"; $env:TOTAL_EQUITY_KRW=\"1000000\"; & \".\\\\.venv\\\\Scripts\\\\python.exe\" -m coinforge.cli.trader --once --log-level INFO 2>&1 | Select-Object -Last 20)",
+      "Bash(cat)",
+      "Bash(./.venv/Scripts/python.exe \"C:/Users/신기/AppData/Local/Temp/claude/C--Users----Desktop-mcp-coin-forge-backup-20260705-coin-forge/43a4cafe-cc25-4f06-ac66-17d89dfa1a95/scratchpad/bt.py\")",
+      "Bash(./.venv/Scripts/python.exe -c ' *)",
+      "Bash(./.venv/Scripts/python.exe \"C:/Users/신기/AppData/Local/Temp/claude/C--Users----Desktop-mcp-coin-forge-backup-20260705-coin-forge/43a4cafe-cc25-4f06-ac66-17d89dfa1a95/scratchpad/smoke.py\")",
+      "Bash(TRADING_MODE=paper TOTAL_EQUITY_KRW=1000000 ./.venv/Scripts/python.exe -m coinforge.cli.api --host 127.0.0.1 --port 8000)",
+      "Bash(./.venv/Scripts/python.exe -c \"import urllib.request; print\\('HTTP', urllib.request.urlopen\\('http://127.0.0.1:8000/api/status', timeout=8\\).status\\)\")",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_exchange.py -q)",
+      "Bash(./.venv/Scripts/python.exe -m pytest -q)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_bridge.py tests/test_scheduler.py -q)",
+      "Bash(./.venv/Scripts/python.exe -c \"import coinforge.exchange.upbit, coinforge.bridge.upbit_rest, coinforge.factory, coinforge.config; print\\('imports OK'\\)\")",
+      "Bash(./.venv/Scripts/python.exe -m ruff check .)",
+      "Bash(echo \"--- exit: $? ---\")",
+      "Bash(./.venv/Scripts/python.exe -m ruff check --fix tests/test_exchange.py tests/test_bridge.py)",
+      "Bash(./.venv/Scripts/python.exe -c \"import yaml,sys; yaml.safe_load\\(open\\('.github/workflows/ci.yml',encoding='utf-8'\\)\\); print\\('YAML OK'\\)\")"
+    ]
+  }
+}

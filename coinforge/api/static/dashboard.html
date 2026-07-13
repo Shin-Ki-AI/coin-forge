@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Coin Forge · 대시보드</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+<style>
+  :root{
+    --bg:#f8fafc; --panel:#ffffff; --border:#e2e8f0; --text:#334155; --muted:#64748b;
+    --green:#16a34a; --green-bg:#dcfce7; --red:#dc2626; --red-bg:#fee2e2;
+    --amber:#d97706; --amber-bg:#fef3c7; --blue:#2563eb; --blue-bg:#dbeafe;
+    --ma20:#38bdf8; --ma60:#6366f1; --ma200:#1e3a5f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font-family:"Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;font-size:14px}
+  header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:14px 20px;background:var(--panel);border-bottom:1px solid var(--border)}
+  header h1{font-size:18px;margin:0;font-weight:700}
+  .pill{padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600}
+  .pill.paper{background:var(--blue-bg);color:var(--blue)}
+  .pill.live{background:var(--red-bg);color:var(--red)}
+  .spacer{flex:1}
+  .muted{color:var(--muted);font-size:12px}
+  main{max-width:1280px;margin:0 auto;padding:18px 20px;display:flex;flex-direction:column;gap:16px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:880px){.row{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .panel h2{margin:0 0 12px;font-size:14px;font-weight:700;color:var(--muted);
+    text-transform:none;letter-spacing:0}
+  .statbar{display:flex;flex-wrap:wrap;gap:22px}
+  .stat{display:flex;flex-direction:column;gap:2px}
+  .stat .k{font-size:11px;color:var(--muted)}
+  .stat .v{font-size:16px;font-weight:700}
+  .decision{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .badge{padding:6px 14px;border-radius:8px;font-weight:700;font-size:15px}
+  .badge.entry{background:var(--green-bg);color:var(--green)}
+  .badge.exit,.badge.full_exit,.badge.partial_exit{background:var(--red-bg);color:var(--red)}
+  .badge.blocked{background:var(--red-bg);color:var(--red)}
+  .badge.wait,.badge.hold{background:var(--amber-bg);color:var(--amber)}
+  .gate{display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--border)}
+  .gate .mark{flex:0 0 auto;width:20px;height:20px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700;margin-top:1px}
+  .gate.ok .mark{background:var(--green)} .gate.no .mark{background:#cbd5e1}
+  .gate .body .name{font-weight:600}
+  .gate .body .detail{font-size:12px;color:var(--muted);margin-top:2px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--muted);font-weight:600;font-size:12px}
+  .tag{padding:1px 7px;border-radius:6px;font-size:11px;font-weight:600}
+  .tag.entry{background:var(--green-bg);color:var(--green)}
+  .tag.exit{background:var(--red-bg);color:var(--red)}
+  .tag.partial_exit{background:var(--amber-bg);color:var(--amber)}
+  .pos-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px}
+  .pos-grid .k{font-size:11px;color:var(--muted)}
+  .pos-grid .v{font-size:15px;font-weight:700}
+  .pos-empty{color:var(--muted);padding:14px 0;text-align:center}
+  button{font:inherit;font-weight:600;padding:8px 16px;border-radius:8px;border:1px solid var(--border);
+    background:var(--panel);color:var(--text);cursor:pointer}
+  button:hover{background:#f1f5f9}
+  button:disabled{opacity:.6;cursor:default}
+  .bt-metrics{display:flex;flex-wrap:wrap;gap:22px;margin-top:12px}
+  .gatefinal{margin-top:12px;padding:10px 12px;border-radius:8px;font-weight:600}
+  .gatefinal.pass{background:var(--green-bg);color:var(--green)}
+  .gatefinal.fail{background:var(--red-bg);color:var(--red)}
+  .pos{color:var(--green)} .neg{color:var(--red)}
+  #err{display:none;background:var(--red-bg);color:var(--red);padding:10px 14px;border-radius:8px}
+</style>
+</head>
+<body>
+<header>
+  <h1>⚒️ Coin Forge</h1>
+  <span id="market" class="pill paper">KRW-BTC</span>
+  <span id="mode" class="pill paper">paper</span>
+  <div class="spacer"></div>
+  <div class="muted">현재가 <b id="price" style="font-size:15px;color:var(--text)">—</b></div>
+  <div class="muted">갱신 <span id="updated">—</span> · <span id="countdown">60</span>s 후 재조회</div>
+  <button id="refreshBtn" style="padding:5px 12px">새로고침</button>
+</header>
+
+<main>
+  <div id="err"></div>
+
+  <!-- 상태 바 -->
+  <div class="panel">
+    <div class="statbar" id="statbar"><span class="muted">불러오는 중…</span></div>
+  </div>
+
+  <div class="row">
+    <!-- 신호 진단 -->
+    <div class="panel">
+      <h2>신호 진단 · 지금 무엇을 하고 있나</h2>
+      <div id="signal"><span class="muted">불러오는 중…</span></div>
+    </div>
+    <!-- 포지션 -->
+    <div class="panel">
+      <h2>현재 포지션</h2>
+      <div id="position"><span class="muted">불러오는 중…</span></div>
+    </div>
+  </div>
+
+  <!-- 차트 -->
+  <div class="panel">
+    <h2>KRW-BTC · 4H · 캔들 + SMA(20/60/200) + 일목 구름</h2>
+    <div id="chart" style="width:100%;height:520px"></div>
+  </div>
+
+  <!-- 백테스트 -->
+  <div class="panel">
+    <h2>전략 진단 · 백테스트</h2>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <button id="btBtn">백테스트 실행 (최근 1500봉)</button>
+      <span class="muted" id="btNote">과거 성과로 전략의 개선 방향을 진단합니다. 실행에 수 초 소요.</span>
+    </div>
+    <div id="btResult"></div>
+  </div>
+
+  <!-- 거래 이력 -->
+  <div class="panel">
+    <h2>거래 이력</h2>
+    <div id="trades"><span class="muted">불러오는 중…</span></div>
+  </div>
+</main>
+
+<script>
+const KRW = v => v==null ? "—" : Math.round(v).toLocaleString("ko-KR");
+const PCT = v => v==null ? "—" : (v*100).toFixed(2)+"%";
+const SIGNPCT = v => (v>=0?"+":"")+(v*100).toFixed(2)+"%";
+const fmtTime = s => { const d=new Date(s); return d.toLocaleString("ko-KR",{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}); };
+
+function showErr(msg){ const e=document.getElementById("err"); e.style.display="block"; e.textContent="오류: "+msg; }
+function clearErr(){ document.getElementById("err").style.display="none"; }
+
+async function getJSON(url){
+  const r = await fetch(url);
+  if(!r.ok) throw new Error(url+" → "+r.status);
+  return r.json();
+}
+
+const DECISION_LABEL = {
+  entry:"진입 신호", blocked:"매수 차단", wait:"대기", hold:"보유 유지",
+  exit:"청산", full_exit:"전량 청산", partial_exit:"부분 청산"
+};
+
+function renderStatus(s){
+  const halted = s.trading_halted;
+  const dlPct = s.total_equity_krw ? s.daily_loss_krw/s.total_equity_krw : 0;
+  document.getElementById("market").textContent = s.market;
+  const modeEl = document.getElementById("mode");
+  modeEl.textContent = s.mode; modeEl.className = "pill "+(s.mode==="live"?"live":"paper");
+  document.getElementById("statbar").innerHTML = `
+    <div class="stat"><span class="k">운영 모드</span><span class="v">${s.mode==="live"?"실거래":"페이퍼"}</span></div>
+    <div class="stat"><span class="k">기준 자본</span><span class="v">${KRW(s.total_equity_krw)}</span></div>
+    <div class="stat"><span class="k">당일 손실</span><span class="v ${s.daily_loss_krw>0?'neg':''}">${KRW(s.daily_loss_krw)} (${PCT(dlPct)})</span></div>
+    <div class="stat"><span class="k">일일 한도</span><span class="v">${PCT(s.daily_loss_limit_pct)}</span></div>
+    <div class="stat"><span class="k">서킷 브레이커</span><span class="v ${halted?'neg':'pos'}">${halted?"🛑 중단":"✅ 정상"}</span></div>
+    <div class="stat"><span class="k">포지션</span><span class="v">${s.has_position?"보유 중":"없음"}</span></div>`;
+}
+
+function renderSignal(sig, price, dt){
+  const d = sig.signal;
+  const gatesHtml = d.gates.map(g=>`
+    <div class="gate ${g.passed?'ok':'no'}">
+      <div class="mark">${g.passed?'✓':'·'}</div>
+      <div class="body"><div class="name">${g.name}</div><div class="detail">${g.detail}</div></div>
+    </div>`).join("");
+  const defense = d.defense_blocked
+    ? `<div class="gate no"><div class="mark">✕</div><div class="body"><div class="name">방어(매수 차단)</div><div class="detail">${d.defense_reason}</div></div></div>` : "";
+  const vol = d.volume_confirmed ? `<span class="tag entry" style="margin-left:8px">거래량 확인</span>` : "";
+  const cls = ["entry"].includes(d.decision)?"entry"
+    :["blocked"].includes(d.decision)?"blocked"
+    :["exit","full_exit","partial_exit"].includes(d.decision)?"exit":"wait";
+  document.getElementById("signal").innerHTML = `
+    <div class="decision">
+      <span class="badge ${cls}">${DECISION_LABEL[d.decision]||d.decision}</span>${vol}
+    </div>
+    <div style="margin-bottom:6px">${d.headline}</div>
+    <div class="muted" style="margin-bottom:6px">기준 봉: ${fmtTime(dt)} · 종가 ${KRW(price)}</div>
+    ${defense}${gatesHtml}`;
+}
+
+function renderPosition(p){
+  const el = document.getElementById("position");
+  if(!p){ el.innerHTML = `<div class="pos-empty">보유 중인 포지션이 없습니다.<br><span class="muted">진입 신호 발생 시 여기에 표시됩니다.</span></div>`; return; }
+  const pnlCls = p.unrealized_pnl_pct>=0?"pos":"neg";
+  el.innerHTML = `
+    <div class="pos-grid">
+      <div><div class="k">진입가</div><div class="v">${KRW(p.entry_price)}</div></div>
+      <div><div class="k">현재가</div><div class="v">${KRW(p.current_price)}</div></div>
+      <div><div class="k">수량 (BTC)</div><div class="v">${p.quantity.toFixed(8)}</div></div>
+      <div><div class="k">미실현 손익</div><div class="v ${pnlCls}">${SIGNPCT(p.unrealized_pnl_pct)} (${p.r_multiple.toFixed(2)}R)</div></div>
+      <div><div class="k">손절가</div><div class="v neg">${KRW(p.stop_price)}</div></div>
+      <div><div class="k">부분익절</div><div class="v">${p.partial_taken?"완료":"대기"}</div></div>
+      <div><div class="k">2R 목표</div><div class="v pos">${KRW(p.target_2r)}</div></div>
+      <div><div class="k">3R 목표</div><div class="v pos">${KRW(p.target_3r)}</div></div>
+    </div>
+    <div class="muted" style="margin-top:10px">진입 사유: ${p.entry_reason||"—"}</div>`;
+}
+
+function renderTrades(trades){
+  const el = document.getElementById("trades");
+  if(!trades.length){ el.innerHTML = `<div class="muted" style="padding:8px 0">아직 체결된 거래가 없습니다. (페이퍼 모드에서 진입/청산이 발생하면 기록됩니다)</div>`; return; }
+  const rows = trades.slice().reverse().map(t=>`
+    <tr>
+      <td>${fmtTime(t.timestamp)}</td>
+      <td><span class="tag ${t.trade_type}">${({entry:"진입",exit:"청산",partial_exit:"부분청산"})[t.trade_type]||t.trade_type}</span></td>
+      <td>${KRW(t.price)}</td>
+      <td>${t.quantity.toFixed(6)}</td>
+      <td class="${t.pnl_pct==null?'':(t.pnl_pct>=0?'pos':'neg')}">${t.pnl_pct==null?"—":SIGNPCT(t.pnl_pct)}</td>
+      <td style="text-align:left;color:var(--muted);white-space:normal;max-width:280px">${t.reason||""}</td>
+    </tr>`).join("");
+  el.innerHTML = `<table><thead><tr><th>시각</th><th>유형</th><th>가격</th><th>수량</th><th>손익률</th><th>사유</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function cloudTraces(times,a,b){
+  const traces=[]; let run=[]; let bullRun=null;
+  const flush=()=>{ if(run.length<2){run=[];return;}
+    const xs=run.map(p=>p.t), ays=run.map(p=>p.a), bys=run.map(p=>p.b);
+    traces.push({x:xs.concat(xs.slice().reverse()), y:ays.concat(bys.slice().reverse()),
+      fill:"toself", mode:"none", fillcolor: bullRun?"rgba(134,239,172,0.40)":"rgba(252,165,165,0.40)",
+      hoverinfo:"skip", showlegend:false});
+    run=[]; };
+  for(let i=0;i<times.length;i++){
+    if(a[i]==null||b[i]==null){ flush(); bullRun=null; continue; }
+    const bull = a[i]>=b[i];
+    if(bullRun===null) bullRun=bull;
+    if(bull!==bullRun){ run.push({t:times[i],a:a[i],b:b[i]}); flush(); run=[{t:times[i],a:a[i],b:b[i]}]; bullRun=bull; }
+    else run.push({t:times[i],a:a[i],b:b[i]});
+  }
+  flush(); return traces;
+}
+
+function renderChart(data){
+  const c=data.candles;
+  const t=c.map(x=>x.datetime);
+  const line=(k,color,w)=>({x:t,y:c.map(x=>x[k]),type:"scatter",mode:"lines",
+    line:{color,width:w},name:k.toUpperCase(),connectgaps:false});
+  const candle={x:t,open:c.map(x=>x.open),high:c.map(x=>x.high),low:c.map(x=>x.low),close:c.map(x=>x.close),
+    type:"candlestick",name:"KRW-BTC",
+    increasing:{line:{color:"#16a34a"},fillcolor:"#22c55e"},
+    decreasing:{line:{color:"#dc2626"},fillcolor:"#ef4444"}};
+  const clouds=cloudTraces(t,c.map(x=>x.senkou_a),c.map(x=>x.senkou_b));
+  const traces=[...clouds, candle,
+    line("sma20","#38bdf8",1.4), line("sma60","#6366f1",1.8), line("sma200","#1e3a5f",2.4)];
+  const layout={
+    margin:{l:56,r:16,t:8,b:36}, paper_bgcolor:"#fff", plot_bgcolor:"#fff",
+    showlegend:true, legend:{orientation:"h",y:1.02,x:0,font:{size:11}},
+    xaxis:{type:"date",rangeslider:{visible:false},gridcolor:"#f1f5f9"},
+    yaxis:{tickformat:".3s",gridcolor:"#f1f5f9",fixedrange:false},
+    dragmode:"pan", hovermode:"x unified"};
+  Plotly.react("chart",traces,layout,{responsive:true,displayModeBar:false,scrollZoom:true});
+}
+
+async function refreshAll(){
+  try{
+    clearErr();
+    const [status,signal,position,trades,candles] = await Promise.all([
+      getJSON("/api/status"), getJSON("/api/signal"), getJSON("/api/position"),
+      getJSON("/api/trades?limit=100"), getJSON("/api/candles")
+    ]);
+    document.getElementById("price").textContent = KRW(signal.price);
+    document.getElementById("updated").textContent = new Date().toLocaleTimeString("ko-KR");
+    renderStatus(status);
+    renderSignal(signal, signal.price, signal.datetime);
+    renderPosition(position.position);
+    renderTrades(trades.trades);
+    renderChart(candles);
+  }catch(e){ showErr(e.message); }
+}
+
+async function runBacktest(){
+  const btn=document.getElementById("btBtn"); const res=document.getElementById("btResult");
+  btn.disabled=true; const old=btn.textContent; btn.textContent="실행 중…";
+  res.innerHTML=`<div class="muted" style="margin-top:12px">과거 데이터 수집·시뮬레이션 중… (수 초)</div>`;
+  try{
+    const d = await getJSON("/api/backtest?bars=1500");
+    const m=d.metrics; const pf = m.profit_factor===null||m.profit_factor>1e6 ? "∞" : m.profit_factor.toFixed(2);
+    res.innerHTML=`
+      <div class="bt-metrics">
+        <div class="stat"><span class="k">기간</span><span class="v" style="font-size:13px">${fmtTime(d.period.from)} ~ ${fmtTime(d.period.to)} (${d.period.bars}봉)</span></div>
+        <div class="stat"><span class="k">총 거래</span><span class="v">${m.total_trades}</span></div>
+        <div class="stat"><span class="k">승 / 패</span><span class="v">${m.wins} / ${m.losses}</span></div>
+        <div class="stat"><span class="k">승률 (≥45%)</span><span class="v ${m.win_rate>=0.45?'pos':'neg'}">${PCT(m.win_rate)}</span></div>
+        <div class="stat"><span class="k">손익비 (≥1.5)</span><span class="v ${(m.profit_factor>=1.5)?'pos':'neg'}">${pf}</span></div>
+        <div class="stat"><span class="k">MDD</span><span class="v neg">${PCT(m.max_drawdown)}</span></div>
+        <div class="stat"><span class="k">수익률</span><span class="v ${m.return_pct>=0?'pos':'neg'}">${SIGNPCT(m.return_pct)}</span></div>
+      </div>
+      <div class="gatefinal ${d.gate_passed?'pass':'fail'}">${d.gate_passed?"✅ 배포 게이트 통과":"❌ 배포 게이트 차단"} — ${d.gate_reason}</div>`;
+  }catch(e){ res.innerHTML=`<div class="muted neg" style="margin-top:12px">백테스트 실패: ${e.message}</div>`; }
+  finally{ btn.disabled=false; btn.textContent=old; }
+}
+
+let countdown=60;
+setInterval(()=>{ countdown--; if(countdown<=0){ countdown=60; refreshAll(); }
+  document.getElementById("countdown").textContent=countdown; },1000);
+document.getElementById("refreshBtn").onclick=()=>{ countdown=60; refreshAll(); };
+document.getElementById("btBtn").onclick=runBacktest;
+refreshAll();
+</script>
+</body>
+</html>
