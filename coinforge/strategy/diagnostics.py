@@ -56,14 +56,17 @@ def _won(v: float) -> str:
 
 
 def evaluate_signal(
-    state: MarketState, position: Optional[Position] = None
+    state: MarketState, position: Optional[Position] = None, params=None
 ) -> SignalDiagnostics:
     """현재 시장 상태로 매매 의사결정을 진단한다 (주문 없음)."""
+    from .params import DEFAULT_PARAMS
+
+    p = params or DEFAULT_PARAMS
     ind: Indicators = state.indicators
 
     # 포지션 보유 시: 청산 관점
     if position is not None:
-        exit_res = evaluate_exit(position, ind)
+        exit_res = evaluate_exit(position, ind, p)
         gates = _exit_gates(position, ind)
         if exit_res.action.value == "hold":
             return SignalDiagnostics(
@@ -81,9 +84,9 @@ def evaluate_signal(
             exit_reason=exit_res.reason,
         )
 
-    # 무포지션: 방어 → 3관문
+    # 무포지션: 방어 → 진입 관문
     defense = evaluate_defense(ind, None)
-    gates = _entry_gates(state)
+    gates = _entry_gates(state, p)
 
     if defense.blocked:
         return SignalDiagnostics(
@@ -100,7 +103,7 @@ def evaluate_signal(
         vol = " · 거래량 확인(신뢰도↑)" if ind.volume_above_avg else ""
         return SignalDiagnostics(
             decision="entry",
-            headline=f"진입 신호 발생 — 3관문 통과{vol}",
+            headline=f"진입 신호 발생 — 진입 조건 통과{vol}",
             gates=gates,
             volume_confirmed=ind.volume_above_avg,
         )
@@ -114,28 +117,55 @@ def evaluate_signal(
     )
 
 
-def _entry_gates(state: MarketState) -> list[GateStatus]:
+def _entry_gates(state: MarketState, params=None) -> list[GateStatus]:
+    """활성화된 관문만 상태로 반환한다(params 의 require_* 토글 반영)."""
+    from .params import DEFAULT_PARAMS
+
+    p = params or DEFAULT_PARAMS
     ind = state.indicators
-    g1 = ind.above_cloud and ind.is_bull_cloud
-    g1_detail = (
-        f"가격 {_won(ind.close)} vs 구름상단 {_won(ind.cloud_top)} · "
-        f"구름 {'상승' if ind.is_bull_cloud else '하락'}"
-    )
+    gates: list[GateStatus] = []
 
-    g2 = ind.ma_aligned_bull and ind.close > ind.sma20
-    g2_detail = (
-        f"MA200 {_won(ind.sma200)} < MA60 {_won(ind.sma60)} < MA20 {_won(ind.sma20)} "
-        f"{'정배열' if ind.ma_aligned_bull else '아님'} · 가격 {'>' if ind.close > ind.sma20 else '≤'} MA20"
-    )
+    if p.require_cloud:
+        g1 = ind.above_cloud and ind.is_bull_cloud
+        gates.append(GateStatus(
+            "1관문 · 장기 환경", g1,
+            f"가격 {_won(ind.close)} vs 구름상단 {_won(ind.cloud_top)} · "
+            f"구름 {'상승' if ind.is_bull_cloud else '하락'}",
+        ))
 
-    pb = detect_pullback(state.frame)
-    g3_detail = pb.reason
+    if p.require_ma_alignment:
+        g2 = ind.ma_aligned_bull and ind.close > ind.sma20
+        gates.append(GateStatus(
+            "2관문 · 추세 정배열", g2,
+            f"MA200 {_won(ind.sma200)} < MA60 {_won(ind.sma60)} < MA20 {_won(ind.sma20)} "
+            f"{'정배열' if ind.ma_aligned_bull else '아님'} · "
+            f"가격 {'>' if ind.close > ind.sma20 else '≤'} MA20",
+        ))
 
-    return [
-        GateStatus("1관문 · 장기 환경", g1, g1_detail),
-        GateStatus("2관문 · 추세 정배열", g2, g2_detail),
-        GateStatus("3관문 · 눌림목 반등", pb.triggered, g3_detail),
-    ]
+    if p.require_pullback:
+        pb = detect_pullback(state.frame)
+        gates.append(GateStatus("3관문 · 눌림목 반등", pb.triggered, pb.reason))
+
+    if p.require_rsi:
+        ok = ind.rsi < p.rsi_overbought
+        gates.append(GateStatus(
+            "RSI · 과매수 회피", ok,
+            f"RSI {ind.rsi:.0f} {'<' if ok else '≥'} 기준 {p.rsi_overbought:.0f}",
+        ))
+
+    if p.require_macd:
+        gates.append(GateStatus(
+            "MACD · 상승 모멘텀", ind.macd_bullish,
+            f"MACD {_won(ind.macd)} {'>' if ind.macd_bullish else '≤'} 시그널 {_won(ind.macd_signal)}",
+        ))
+
+    if p.require_volume:
+        gates.append(GateStatus(
+            "거래량 · 평균 이상", ind.volume_above_avg,
+            f"거래량 {ind.volume:,.1f} vs 20봉평균 {ind.volume_avg20:,.1f}",
+        ))
+
+    return gates
 
 
 def _exit_gates(position: Position, ind: Indicators) -> list[GateStatus]:

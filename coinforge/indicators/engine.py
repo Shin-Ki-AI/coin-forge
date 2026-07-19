@@ -18,6 +18,11 @@ class InsufficientCandlesError(ValueError):
     """지표 계산에 필요한 최소 봉 수 미달 (CHECKLIST 3.7)."""
 
 
+def _num(v, default: float) -> float:
+    """NaN/None 이면 default, 아니면 float."""
+    return default if v is None or pd.isna(v) else float(v)
+
+
 def compute_indicator_frame(df: pd.DataFrame, params=None) -> pd.DataFrame:
     """OHLCV DataFrame → 지표 컬럼이 추가된 DataFrame.
 
@@ -55,6 +60,19 @@ def compute_indicator_frame(df: pd.DataFrame, params=None) -> pd.DataFrame:
     out["senkou_b"] = senkou_b_raw.shift(constants.ICHIMOKU_DISPLACEMENT)
 
     out["volume_avg20"] = out["volume"].rolling(constants.VOLUME_AVG_PERIOD).mean()
+
+    # RSI (단순 평균 기반). loss=0 → RSI=100.
+    delta = close.diff()
+    avg_gain = delta.clip(lower=0).rolling(p.rsi_period).mean()
+    avg_loss = (-delta.clip(upper=0)).rolling(p.rsi_period).mean()
+    rs = avg_gain / avg_loss
+    out["rsi"] = 100.0 - 100.0 / (1.0 + rs)
+
+    # MACD = EMA(fast) - EMA(slow), 시그널 = EMA(MACD)
+    ema_fast = close.ewm(span=p.macd_fast, adjust=False).mean()
+    ema_slow = close.ewm(span=p.macd_slow, adjust=False).mean()
+    out["macd"] = ema_fast - ema_slow
+    out["macd_signal"] = out["macd"].ewm(span=p.macd_signal_period, adjust=False).mean()
 
     return out
 
@@ -103,4 +121,8 @@ class IndicatorEngine:
             senkou_b=float(last["senkou_b"]),
             volume=float(last["volume"]),
             volume_avg20=float(vol_avg) if not pd.isna(vol_avg) else 0.0,
+            # 보조 기법: 미계산(NaN) 시 중립값 → 필터가 안전하게 통과
+            rsi=_num(last["rsi"], 50.0),
+            macd=_num(last["macd"], 0.0),
+            macd_signal=_num(last["macd_signal"], 0.0),
         )

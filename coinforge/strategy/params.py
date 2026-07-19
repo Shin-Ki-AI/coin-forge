@@ -30,5 +30,14 @@ class StrategyParams:
     require_pullback: bool = True       # 3관문: 눌림목 반등
     require_volume: bool = False        # 거래량 > 평균을 '차단 조건'으로 승격
 
+    # 보조 기법 (기본 off — 켜면 추가 진입 필터)
+    require_rsi: bool = False           # RSI 과매수면 진입 보류
+    rsi_period: int = constants.RSI_PERIOD
+    rsi_overbought: float = constants.RSI_OVERBOUGHT
+    require_macd: bool = False          # MACD < 시그널(약세)이면 진입 보류
+    macd_fast: int = constants.MACD_FAST
+    macd_slow: int = constants.MACD_SLOW
+    macd_signal_period: int = constants.MACD_SIGNAL
+
 
 DEFAULT_PARAMS = StrategyParams()

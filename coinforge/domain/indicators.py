@@ -35,6 +35,16 @@ class Indicators:
     volume: float
     volume_avg20: float
 
+    # 보조 기법 (기본 중립값 — 미계산 시에도 필터가 안전하게 통과)
+    rsi: float = 50.0
+    macd: float = 0.0
+    macd_signal: float = 0.0
+
+    @property
+    def macd_bullish(self) -> bool:
+        """MACD 라인이 시그널 위 (상승 모멘텀)."""
+        return self.macd > self.macd_signal
+
     @property
     def cloud_top(self) -> float:
         return max(self.senkou_a, self.senkou_b)

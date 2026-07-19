@@ -77,4 +77,5 @@ def build_orchestrator(config: Config) -> Orchestrator:
         exchange=build_exchange(config),
         repository=build_repository(config),
         notifier=build_notifier(config),
+        params=config.strategy_params(),
     )

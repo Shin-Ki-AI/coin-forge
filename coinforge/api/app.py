@@ -63,7 +63,9 @@ def create_app(config: Config | None = None):
     @app.get("/api/candles")
     def get_candles():  # noqa: ANN202
         candles = cache.get()
-        frame = compute_indicator_frame(candles_to_dataframe(candles)).reset_index()
+        frame = compute_indicator_frame(
+            candles_to_dataframe(candles), config.strategy_params()
+        ).reset_index()
         records = []
         for _, r in frame.iterrows():
             records.append({
@@ -78,10 +80,11 @@ def create_app(config: Config | None = None):
     # --- 신호 진단 (운영 관찰 핵심) ---
     @app.get("/api/signal")
     def get_signal():  # noqa: ANN202
+        params = config.strategy_params()
         candles = cache.get()
-        state = build_market_state(candles)
+        state = build_market_state(candles, params=params)
         pos = repo.get_open_position(config.market)
-        diag = evaluate_signal(state, pos)
+        diag = evaluate_signal(state, pos, params)
         ind = state.indicators
         return {
             "market": config.market,
@@ -92,6 +95,7 @@ def create_app(config: Config | None = None):
                 "cloud_top": ind.cloud_top, "cloud_bottom": ind.cloud_bottom,
                 "cloud_color": ind.cloud_color.value,
                 "volume": ind.volume, "volume_avg20": ind.volume_avg20,
+                "rsi": ind.rsi, "macd": ind.macd, "macd_signal": ind.macd_signal,
             },
             "has_position": pos is not None,
             "signal": diag.as_dict(),

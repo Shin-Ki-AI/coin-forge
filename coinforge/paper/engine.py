@@ -109,6 +109,7 @@ class PaperEngine:
             orch = Orchestrator(
                 config=self.config, candle_provider=self.provider,
                 exchange=exchange, repository=repo, notifier=MockNotifier(),
+                params=self.config.strategy_params(),
             )
             result = orch.run_cycle(now=now)
 

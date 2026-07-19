@@ -21,6 +21,9 @@ PRESETS: dict[str, StrategyParams] = {
     "눌림목 없이": StrategyParams(require_pullback=False),
     "거래량 필수": StrategyParams(require_volume=True),
     "익절 넓게 (3R/5R)": StrategyParams(partial_take_r=3.0, full_take_r=5.0),
+    "RSI 필터 (과매수 회피)": StrategyParams(require_rsi=True),
+    "MACD 확인": StrategyParams(require_macd=True),
+    "RSI+MACD 결합": StrategyParams(require_rsi=True, require_macd=True),
 }
 
 

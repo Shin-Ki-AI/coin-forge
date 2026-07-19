@@ -25,6 +25,13 @@ ICHIMOKU_DISPLACEMENT = 26  # 26봉 선행(미래) displacement
 # --- 거래량 부가 조건 ----------------------------------------------------------
 VOLUME_AVG_PERIOD = 20   # 직전 20봉 평균 거래량 비교
 
+# --- RSI / MACD (보조 기법, 기본 off) ------------------------------------------
+RSI_PERIOD = 14          # RSI 기간
+RSI_OVERBOUGHT = 70.0    # 이 이상이면 과매수 → 진입 보류(require_rsi 시)
+MACD_FAST = 12           # MACD 단기 EMA
+MACD_SLOW = 26           # MACD 장기 EMA
+MACD_SIGNAL = 9          # MACD 시그널 EMA
+
 # --- 리스크 파라미터 (PLAN.md 자금관리) ---------------------------------------
 RISK_PER_TRADE_PCT = 0.01     # 1% 룰: 1회 거래 최대 손실 = 총자산 1%
 DAILY_LOSS_LIMIT_PCT = 0.03   # 일일 손실 3% 초과 시 당일 거래 중단

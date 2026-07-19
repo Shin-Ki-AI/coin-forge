@@ -56,6 +56,14 @@ def evaluate_entry(state: MarketState, params=None) -> EntryResult:
         pullback_kind = pb.kind
         pb_note = f" — {pb.reason}"
 
+    # 보조 기법 필터 (기본 off)
+    if p.require_rsi and ind.rsi >= p.rsi_overbought:
+        return EntryResult(
+            False, f"RSI 과매수 차단 (RSI {ind.rsi:.0f} ≥ {p.rsi_overbought:.0f})"
+        )
+    if p.require_macd and not ind.macd_bullish:
+        return EntryResult(False, "MACD 약세 차단 (MACD < 시그널)")
+
     volume_confirmed = ind.volume_above_avg
     if p.require_volume and not volume_confirmed:
         return EntryResult(False, "거래량 조건 실패: 현재 거래량이 20봉 평균 이하")

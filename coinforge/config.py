@@ -85,6 +85,40 @@ class Config(BaseSettings):
     # 모의계좌 상태 JSON 경로 (재시작해도 누적 유지).
     paper_state_path: str = Field(default="paper_state.json", alias="PAPER_STATE_PATH")
 
+    # --- 전략 튜닝 (#2 + 보조기법) — 실거래/모의투자에 적용 ---
+    ma_short: int = Field(default=constants.MA_SHORT, alias="MA_SHORT")
+    ma_mid: int = Field(default=constants.MA_MID, alias="MA_MID")
+    ma_long: int = Field(default=constants.MA_LONG, alias="MA_LONG")
+    partial_take_r: float = Field(default=constants.PARTIAL_TAKE_R, alias="PARTIAL_TAKE_R")
+    full_take_r: float = Field(default=constants.FULL_TAKE_R, alias="FULL_TAKE_R")
+    require_cloud: bool = Field(default=True, alias="REQUIRE_CLOUD")
+    require_ma_alignment: bool = Field(default=True, alias="REQUIRE_MA_ALIGNMENT")
+    require_pullback: bool = Field(default=True, alias="REQUIRE_PULLBACK")
+    require_volume: bool = Field(default=False, alias="REQUIRE_VOLUME")
+    require_rsi: bool = Field(default=False, alias="REQUIRE_RSI")
+    rsi_period: int = Field(default=constants.RSI_PERIOD, alias="RSI_PERIOD")
+    rsi_overbought: float = Field(default=constants.RSI_OVERBOUGHT, alias="RSI_OVERBOUGHT")
+    require_macd: bool = Field(default=False, alias="REQUIRE_MACD")
+    macd_fast: int = Field(default=constants.MACD_FAST, alias="MACD_FAST")
+    macd_slow: int = Field(default=constants.MACD_SLOW, alias="MACD_SLOW")
+    macd_signal_period: int = Field(default=constants.MACD_SIGNAL, alias="MACD_SIGNAL")
+
+    def strategy_params(self):
+        """설정값으로 StrategyParams 를 만든다 (실거래/모의투자/신호진단 공통)."""
+        from .strategy.params import StrategyParams
+
+        return StrategyParams(
+            ma_short=self.ma_short, ma_mid=self.ma_mid, ma_long=self.ma_long,
+            partial_take_r=self.partial_take_r, full_take_r=self.full_take_r,
+            hard_stop_pct=self.hard_stop_pct,
+            require_cloud=self.require_cloud, require_ma_alignment=self.require_ma_alignment,
+            require_pullback=self.require_pullback, require_volume=self.require_volume,
+            require_rsi=self.require_rsi, rsi_period=self.rsi_period,
+            rsi_overbought=self.rsi_overbought,
+            require_macd=self.require_macd, macd_fast=self.macd_fast,
+            macd_slow=self.macd_slow, macd_signal_period=self.macd_signal_period,
+        )
+
     @property
     def is_live(self) -> bool:
         return self.trading_mode == TradingMode.LIVE
