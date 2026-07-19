@@ -26,6 +26,7 @@ ENV/
 # Generated outputs
 chart.png
 output/
+paper_state*.json
 
 # Jupyter
 .ipynb_checkpoints/

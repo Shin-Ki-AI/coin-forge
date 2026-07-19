@@ -23,6 +23,7 @@ class PositionSizing:
     balance_limited: bool    # 잔고 부족으로 수량이 축소되었는가
     ok: bool                 # 주문 가능 여부
     reason: str = ""
+    equity_capped: bool = False  # 비중 상한(max_position_pct)으로 수량이 제한되었는가
 
 
 @dataclass
@@ -73,10 +74,13 @@ class RiskManager:
         equity_krw: float,
         available_krw: float,
     ) -> PositionSizing:
-        """1% 룰 포지션 사이징.
+        """포지션 사이징 (모드별). 세 단계로 수량을 정한다.
 
-        수량 = (equity * risk_per_trade_pct) / (entry - stop).
-        주문 금액이 가용 KRW 잔고를 초과하면 잔고 한도로 축소한다.
+        1) 목표 주문금액 산출
+           - risk  모드: 수량 = (equity * 1%) / (entry - stop) — 손절거리 기반
+           - fixed 모드: 주문금액 = equity * fixed_position_pct — 고정 비율
+        2) 비중 상한: 주문금액 > equity * max_position_pct 이면 상한으로 제한 (100% 올인 방지)
+        3) 잔고 한도: 주문금액 > 가용 KRW 이면 잔고 내로 축소
         """
         stop_price = compute_stop_price(entry_price, ind)
         risk_per_unit = entry_price - stop_price
@@ -93,30 +97,51 @@ class RiskManager:
                 reason="손절가가 진입가 이상 — 유효한 리스크 산출 불가",
             )
 
-        risk_krw = equity_krw * self.config.risk_per_trade_pct
-        quantity = risk_krw / risk_per_unit
-        notional = quantity * entry_price
+        # 1) 모드별 목표 주문금액
+        if self.config.sizing_mode == constants.SIZING_MODE_FIXED:
+            notional = equity_krw * self.config.fixed_position_pct
+        else:  # risk (기본)
+            notional = (equity_krw * self.config.risk_per_trade_pct) / risk_per_unit * entry_price
 
+        # 2) 비중 상한 (100% 올인 방지)
+        equity_capped = False
+        max_notional = equity_krw * self.config.max_position_pct
+        if notional > max_notional:
+            equity_capped = True
+            notional = max_notional
+
+        # 3) 잔고 한도 (수수료·라운딩 여유 반영)
         balance_limited = False
-        # 수수료·라운딩 여유를 뺀 실제 매수 가능 금액
         affordable = available_krw / (1.0 + self.fee_buffer)
         if notional > affordable:
-            # 잔고 검증 (6.5): 가용 잔고 내로 축소
             balance_limited = True
-            quantity = affordable / entry_price if entry_price > 0 else 0.0
-            notional = quantity * entry_price
+            notional = affordable
+
+        quantity = notional / entry_price if entry_price > 0 else 0.0
+        # 실제 이 거래가 감수하는 리스크 금액 (상한/잔고로 축소되면 1%보다 작아짐)
+        risk_krw = quantity * risk_per_unit
 
         if quantity <= 0 or notional <= 0:
             return PositionSizing(
                 quantity=0.0,
                 stop_price=stop_price,
                 risk_per_unit=risk_per_unit,
-                risk_krw=risk_krw,
+                risk_krw=0.0,
                 notional_krw=0.0,
                 balance_limited=balance_limited,
                 ok=False,
                 reason="가용 잔고 부족 — 주문 거부",
+                equity_capped=equity_capped,
             )
+
+        if balance_limited:
+            reason = "잔고 한도로 수량 축소"
+        elif equity_capped:
+            reason = f"비중 상한(자본 {self.config.max_position_pct:.0%})으로 수량 제한"
+        elif self.config.sizing_mode == constants.SIZING_MODE_FIXED:
+            reason = f"고정 비율({self.config.fixed_position_pct:.0%}) 사이징 완료"
+        else:
+            reason = "1% 룰 사이징 완료"
 
         return PositionSizing(
             quantity=quantity,
@@ -126,7 +151,6 @@ class RiskManager:
             notional_krw=notional,
             balance_limited=balance_limited,
             ok=True,
-            reason=(
-                "잔고 한도로 수량 축소" if balance_limited else "1% 룰 사이징 완료"
-            ),
+            reason=reason,
+            equity_capped=equity_capped,
         )

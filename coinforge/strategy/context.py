@@ -28,14 +28,15 @@ class MarketState:
 
 
 def build_market_state(
-    candles: list[Candle], engine: IndicatorEngine | None = None
+    candles: list[Candle], engine: IndicatorEngine | None = None, params=None
 ) -> MarketState:
     """캔들 목록에서 MarketState 를 만든다.
 
     engine.compute() 로 스냅샷 유효성(봉 수·NaN)을 검증한 뒤,
     눌림목 판정을 위한 전체 지표 프레임을 함께 반환한다.
+    프레임과 스냅샷은 동일 params(engine.params)로 계산해 일관성을 유지한다.
     """
-    engine = engine or IndicatorEngine()
+    engine = engine or IndicatorEngine(params=params)
     indicators = engine.compute(candles)  # 검증 포함 (InsufficientCandlesError)
-    frame = compute_indicator_frame(candles_to_dataframe(candles))
+    frame = compute_indicator_frame(candles_to_dataframe(candles), engine.params)
     return MarketState(frame=frame, indicators=indicators)

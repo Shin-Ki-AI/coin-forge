@@ -88,6 +88,19 @@
     <div class="statbar" id="statbar"><span class="muted">불러오는 중…</span></div>
   </div>
 
+  <!-- 모의투자 -->
+  <div class="panel">
+    <h2>모의투자 · 지금부터 실시간 누적</h2>
+    <div id="paperStats" class="bt-metrics"><span class="muted">불러오는 중…</span></div>
+    <div id="paperChart" style="width:100%;height:240px;margin-top:10px"></div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px">
+      <button id="paperStepBtn">한 사이클 실행</button>
+      <button id="paperResetBtn">초기화</button>
+      <span class="muted" id="paperNote">시작 자본에서 출발해 4시간마다 자동 전진합니다. 버튼으로 즉시 한 사이클 진행해볼 수 있어요.</span>
+    </div>
+    <div id="paperTrades" style="margin-top:12px"></div>
+  </div>
+
   <div class="row">
     <!-- 신호 진단 -->
     <div class="panel">
@@ -117,6 +130,16 @@
     <div id="btResult"></div>
   </div>
 
+  <!-- 기법 비교 -->
+  <div class="panel">
+    <h2>기법 비교 · 최적 설정 탐색</h2>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <button id="cmpBtn">비교 실행 (최근 1500봉)</button>
+      <span class="muted" id="cmpNote">여러 전략 설정을 같은 기간으로 백테스트해 순위를 매깁니다. 실행에 수 초~십여 초 소요.</span>
+    </div>
+    <div id="cmpResult"></div>
+  </div>
+
   <!-- 거래 이력 -->
   <div class="panel">
     <h2>거래 이력</h2>
@@ -138,11 +161,70 @@ async function getJSON(url){
   if(!r.ok) throw new Error(url+" → "+r.status);
   return r.json();
 }
+async function postJSON(url){
+  const r = await fetch(url, {method:"POST"});
+  if(!r.ok) throw new Error(url+" → "+r.status);
+  return r.json();
+}
+
+function tradeRows(trades){
+  return trades.slice().reverse().map(t=>`
+    <tr>
+      <td>${fmtTime(t.timestamp)}</td>
+      <td><span class="tag ${t.trade_type}">${({entry:"진입",exit:"청산",partial_exit:"부분청산"})[t.trade_type]||t.trade_type}</span></td>
+      <td>${KRW(t.price)}</td>
+      <td>${t.quantity.toFixed(6)}</td>
+      <td class="${t.pnl_pct==null?'':(t.pnl_pct>=0?'pos':'neg')}">${t.pnl_pct==null?"—":SIGNPCT(t.pnl_pct)}</td>
+      <td style="text-align:left;color:var(--muted);white-space:normal;max-width:280px">${t.reason||""}</td>
+    </tr>`).join("");
+}
+
+function renderPaper(p){
+  const retCls = p.return_pct>=0?"pos":"neg";
+  document.getElementById("paperStats").innerHTML = `
+    <div class="stat"><span class="k">시작 자본</span><span class="v">${KRW(p.starting_equity)}</span></div>
+    <div class="stat"><span class="k">현재 평가액</span><span class="v">${KRW(p.current_equity)}</span></div>
+    <div class="stat"><span class="k">수익률</span><span class="v ${retCls}">${SIGNPCT(p.return_pct)}</span></div>
+    <div class="stat"><span class="k">현금 / BTC</span><span class="v" style="font-size:13px">${KRW(p.cash_krw)} / ${p.btc.toFixed(6)}</span></div>
+    <div class="stat"><span class="k">진행 사이클</span><span class="v">${p.cycles}</span></div>
+    <div class="stat"><span class="k">포지션</span><span class="v">${p.position?"보유 중":"없음"}</span></div>`;
+  const ec = p.equity_curve||[];
+  if(ec.length){
+    Plotly.react("paperChart",[{
+      x:ec.map(x=>x.t), y:ec.map(x=>x.equity), type:"scatter", mode:"lines",
+      line:{color:"#2563eb",width:2}, fill:"tozeroy", fillcolor:"rgba(37,99,235,0.08)"}],
+      {margin:{l:56,r:12,t:6,b:28}, paper_bgcolor:"#fff", plot_bgcolor:"#fff",
+       xaxis:{type:"date",gridcolor:"#f1f5f9"}, yaxis:{tickformat:".3s",gridcolor:"#f1f5f9"}, showlegend:false},
+      {responsive:true,displayModeBar:false});
+  } else {
+    document.getElementById("paperChart").innerHTML = `<div class="muted" style="padding:24px 0;text-align:center">아직 진행한 사이클이 없습니다. "한 사이클 실행"을 눌러 시작하세요.</div>`;
+  }
+  const pt = document.getElementById("paperTrades");
+  pt.innerHTML = (p.trades&&p.trades.length)
+    ? `<table><thead><tr><th>시각</th><th>유형</th><th>가격</th><th>수량</th><th>손익률</th><th>사유</th></tr></thead><tbody>${tradeRows(p.trades)}</tbody></table>`
+    : `<div class="muted" style="padding:6px 0">아직 체결된 모의 거래가 없습니다.</div>`;
+}
+
+async function paperStep(){
+  const b=document.getElementById("paperStepBtn"); b.disabled=true; const o=b.textContent; b.textContent="실행 중…";
+  try{ renderPaper(await postJSON("/api/paper/step")); clearErr(); }
+  catch(e){ showErr(e.message); } finally{ b.disabled=false; b.textContent=o; }
+}
+async function paperReset(){
+  if(!confirm("모의계좌를 초기화할까요? 누적 기록이 사라집니다.")) return;
+  try{ renderPaper(await postJSON("/api/paper/reset")); }catch(e){ showErr(e.message); }
+}
 
 const DECISION_LABEL = {
   entry:"진입 신호", blocked:"매수 차단", wait:"대기", hold:"보유 유지",
   exit:"청산", full_exit:"전량 청산", partial_exit:"부분 청산"
 };
+
+function sizingLabel(s){
+  const cap = s.max_position_pct>=1 ? "상한없음" : `상한 ${Math.round(s.max_position_pct*100)}%`;
+  if(s.sizing_mode==="fixed") return `고정 ${Math.round(s.fixed_position_pct*100)}% · ${cap}`;
+  return `1% 룰 · ${cap}`;
+}
 
 function renderStatus(s){
   const halted = s.trading_halted;
@@ -156,7 +238,8 @@ function renderStatus(s){
     <div class="stat"><span class="k">당일 손실</span><span class="v ${s.daily_loss_krw>0?'neg':''}">${KRW(s.daily_loss_krw)} (${PCT(dlPct)})</span></div>
     <div class="stat"><span class="k">일일 한도</span><span class="v">${PCT(s.daily_loss_limit_pct)}</span></div>
     <div class="stat"><span class="k">서킷 브레이커</span><span class="v ${halted?'neg':'pos'}">${halted?"🛑 중단":"✅ 정상"}</span></div>
-    <div class="stat"><span class="k">포지션</span><span class="v">${s.has_position?"보유 중":"없음"}</span></div>`;
+    <div class="stat"><span class="k">포지션</span><span class="v">${s.has_position?"보유 중":"없음"}</span></div>
+    <div class="stat"><span class="k">비중조절</span><span class="v">${sizingLabel(s)}</span></div>`;
 }
 
 function renderSignal(sig, price, dt){
@@ -256,9 +339,9 @@ function renderChart(data){
 async function refreshAll(){
   try{
     clearErr();
-    const [status,signal,position,trades,candles] = await Promise.all([
+    const [status,signal,position,trades,candles,paper] = await Promise.all([
       getJSON("/api/status"), getJSON("/api/signal"), getJSON("/api/position"),
-      getJSON("/api/trades?limit=100"), getJSON("/api/candles")
+      getJSON("/api/trades?limit=100"), getJSON("/api/candles"), getJSON("/api/paper")
     ]);
     document.getElementById("price").textContent = KRW(signal.price);
     document.getElementById("updated").textContent = new Date().toLocaleTimeString("ko-KR");
@@ -267,6 +350,7 @@ async function refreshAll(){
     renderPosition(position.position);
     renderTrades(trades.trades);
     renderChart(candles);
+    renderPaper(paper);
   }catch(e){ showErr(e.message); }
 }
 
@@ -292,11 +376,41 @@ async function runBacktest(){
   finally{ btn.disabled=false; btn.textContent=old; }
 }
 
+async function runCompare(){
+  const b=document.getElementById("cmpBtn"); b.disabled=true; const o=b.textContent; b.textContent="실행 중…";
+  const res=document.getElementById("cmpResult");
+  res.innerHTML=`<div class="muted" style="margin-top:12px">여러 설정 백테스트 중… (수 초~십여 초)</div>`;
+  try{
+    const d=await getJSON("/api/compare?bars=1500");
+    const rows=d.results.map(r=>{
+      if(!r.ok) return `<tr><td>—</td><td style="text-align:left">${r.name}</td><td colspan="5" style="text-align:left;color:var(--muted)">실행 실패: ${r.error||""}</td></tr>`;
+      const m=r.metrics; const pf=(m.profit_factor==null||m.profit_factor>1e6)?"∞":m.profit_factor.toFixed(2);
+      const gate=r.gate_passed?`<span class="tag entry">통과</span>`:`<span class="tag exit">차단</span>`;
+      const best=r.rank===1?' style="background:var(--green-bg)"':'';
+      return `<tr${best}>
+        <td>${r.rank||"—"}</td>
+        <td style="text-align:left;font-weight:${r.rank===1?700:400}">${r.name}</td>
+        <td>${m.total_trades}</td>
+        <td class="${m.win_rate>=0.45?'pos':'neg'}">${PCT(m.win_rate)}</td>
+        <td class="${m.profit_factor>=1.5?'pos':'neg'}">${pf}</td>
+        <td class="${m.return_pct>=0?'pos':'neg'}">${SIGNPCT(m.return_pct)}</td>
+        <td>${gate}</td></tr>`;
+    }).join("");
+    res.innerHTML=`
+      <div class="muted" style="margin:10px 0 6px">기간: ${fmtTime(d.period.from)} ~ ${fmtTime(d.period.to)} (${d.period.bars}봉) · 순위 기준: 게이트통과 → 손익비 → 승률</div>
+      <table><thead><tr><th>순위</th><th>설정</th><th>거래</th><th>승률</th><th>손익비</th><th>수익률</th><th>게이트</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }catch(e){ res.innerHTML=`<div class="muted neg" style="margin-top:12px">비교 실패: ${e.message}</div>`; }
+  finally{ b.disabled=false; b.textContent=o; }
+}
+
 let countdown=60;
 setInterval(()=>{ countdown--; if(countdown<=0){ countdown=60; refreshAll(); }
   document.getElementById("countdown").textContent=countdown; },1000);
 document.getElementById("refreshBtn").onclick=()=>{ countdown=60; refreshAll(); };
 document.getElementById("btBtn").onclick=runBacktest;
+document.getElementById("paperStepBtn").onclick=paperStep;
+document.getElementById("paperResetBtn").onclick=paperReset;
+document.getElementById("cmpBtn").onclick=runCompare;
 refreshAll();
 </script>
 </body>

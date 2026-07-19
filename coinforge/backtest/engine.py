@@ -54,9 +54,10 @@ class _SlidingProvider:
 
 
 class BacktestEngine:
-    def __init__(self, candles: list[Candle], config: Config) -> None:
+    def __init__(self, candles: list[Candle], config: Config, params=None) -> None:
         self.candles = sorted(candles, key=lambda c: c.datetime)
         self.config = config
+        self.params = params
 
     def run(self) -> BacktestReport:
         count = self.config.candle_count
@@ -75,6 +76,7 @@ class BacktestEngine:
             exchange=exchange,
             repository=repo,
             notifier=notifier,
+            params=self.params,
         )
 
         equity_curve: list[float] = []

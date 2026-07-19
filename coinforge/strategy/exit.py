@@ -26,11 +26,15 @@ class ExitResult:
     pnl_pct: float    # 이 가격 기준 미실현 손익률
 
 
-def evaluate_exit(position: Position, ind: Indicators) -> ExitResult:
+def evaluate_exit(position: Position, ind: Indicators, params=None) -> ExitResult:
     """포지션·지표 스냅샷으로 청산 액션을 평가한다.
 
     현재가는 지표 스냅샷의 종가(ind.close)를 사용한다.
+    params(StrategyParams) 로 하드스탑·2R·3R 배수를 바꿀 수 있다. None 이면 기본 상수.
     """
+    from .params import DEFAULT_PARAMS
+
+    p = params or DEFAULT_PARAMS
     price = ind.close
     pnl = position.unrealized_pnl_pct(price)
     r = position.r_multiple(price)
@@ -39,11 +43,11 @@ def evaluate_exit(position: Position, ind: Indicators) -> ExitResult:
         return ExitResult(ExitAction.HOLD, 0.0, "청산 조건 미충족 (보유 유지)", pnl)
 
     # 1) 비상 하드스탑 -3%
-    if pnl <= -constants.HARD_STOP_PCT:
+    if pnl <= -p.hard_stop_pct:
         return ExitResult(
             ExitAction.FULL_EXIT,
             position.quantity,
-            f"비상 하드스탑 발동 (손실률 {pnl:.2%} ≤ -{constants.HARD_STOP_PCT:.0%})",
+            f"비상 하드스탑 발동 (손실률 {pnl:.2%} ≤ -{p.hard_stop_pct:.0%})",
             pnl,
         )
 
@@ -64,22 +68,22 @@ def evaluate_exit(position: Position, ind: Indicators) -> ExitResult:
         )
 
     # 3) 2R 부분 익절 (아직 실행 안 했을 때만)
-    if not position.partial_taken and r >= constants.PARTIAL_TAKE_R:
+    if not position.partial_taken and r >= p.partial_take_r:
         qty = position.initial_quantity * constants.PARTIAL_TAKE_RATIO
         qty = min(qty, position.quantity)
         return ExitResult(
             ExitAction.PARTIAL_EXIT,
             qty,
-            f"2R 도달 부분 익절 50% (R={r:.2f}, 손익 {pnl:.2%})",
+            f"{p.partial_take_r:g}R 도달 부분 익절 50% (R={r:.2f}, 손익 {pnl:.2%})",
             pnl,
         )
 
     # 4) 전량 익절: 3R 도달 또는 MA20 하향 이탈
-    if r >= constants.FULL_TAKE_R:
+    if r >= p.full_take_r:
         return ExitResult(
             ExitAction.FULL_EXIT,
             position.quantity,
-            f"3R 도달 전량 익절 (R={r:.2f}, 손익 {pnl:.2%})",
+            f"{p.full_take_r:g}R 도달 전량 익절 (R={r:.2f}, 손익 {pnl:.2%})",
             pnl,
         )
     if price < ind.sma20:

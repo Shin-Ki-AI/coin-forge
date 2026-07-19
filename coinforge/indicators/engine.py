@@ -18,19 +18,24 @@ class InsufficientCandlesError(ValueError):
     """지표 계산에 필요한 최소 봉 수 미달 (CHECKLIST 3.7)."""
 
 
-def compute_indicator_frame(df: pd.DataFrame) -> pd.DataFrame:
+def compute_indicator_frame(df: pd.DataFrame, params=None) -> pd.DataFrame:
     """OHLCV DataFrame → 지표 컬럼이 추가된 DataFrame.
 
     참조: coin-chart.py compute_indicators(). 컬럼명은 소문자 규약.
+    params(StrategyParams) 로 이평선 기간을 바꿀 수 있다. None 이면 기본 상수 사용.
+    컬럼명(sma20/60/200)은 의미(단기/중기/장기) 표기이며 실제 기간은 params 를 따른다.
     """
+    from ..strategy.params import DEFAULT_PARAMS
+
+    p = params or DEFAULT_PARAMS
     out = df.copy()
     close = out["close"]
     high = out["high"]
     low = out["low"]
 
-    out["sma20"] = close.rolling(constants.MA_SHORT).mean()
-    out["sma60"] = close.rolling(constants.MA_MID).mean()
-    out["sma200"] = close.rolling(constants.MA_LONG).mean()
+    out["sma20"] = close.rolling(p.ma_short).mean()
+    out["sma60"] = close.rolling(p.ma_mid).mean()
+    out["sma200"] = close.rolling(p.ma_long).mean()
 
     tenkan = (
         high.rolling(constants.TENKAN_PERIOD).max()
@@ -57,8 +62,11 @@ def compute_indicator_frame(df: pd.DataFrame) -> pd.DataFrame:
 class IndicatorEngine:
     """단일 진입점 지표 계산기 (CHECKLIST 3.5)."""
 
-    def __init__(self, min_candles: int = constants.CANDLE_COUNT) -> None:
+    def __init__(self, min_candles: int = constants.CANDLE_COUNT, params=None) -> None:
+        from ..strategy.params import DEFAULT_PARAMS
+
         self.min_candles = min_candles
+        self.params = params or DEFAULT_PARAMS
 
     def compute(self, candles: list[Candle]) -> Indicators:
         """캔들 목록에서 마지막 봉 기준 Indicators 스냅샷을 계산한다.
@@ -73,7 +81,7 @@ class IndicatorEngine:
             )
 
         df = candles_to_dataframe(candles)
-        frame = compute_indicator_frame(df)
+        frame = compute_indicator_frame(df, self.params)
         last = frame.iloc[-1]
 
         required = ["sma20", "sma60", "sma200", "senkou_a", "senkou_b"]

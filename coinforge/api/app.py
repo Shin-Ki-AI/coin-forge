@@ -50,6 +50,10 @@ def create_app(config: Config | None = None):
     risk = RiskManager(config)
     cache = _CandleCache(provider, config.candle_count)
 
+    from ..paper import PaperEngine
+    paper = PaperEngine(config, provider)
+    app.state.paper_engine = paper  # cli/api.py 가 백그라운드 스케줄러로 접근
+
     # --- 대시보드 (정적 SPA) ---
     @app.get("/")
     def dashboard():  # noqa: ANN202
@@ -131,7 +135,29 @@ def create_app(config: Config | None = None):
             "daily_loss_limit_pct": config.daily_loss_limit_pct,
             "trading_halted": halt.halted, "halt_reason": halt.reason,
             "has_position": pos is not None,
+            "sizing_mode": config.sizing_mode,
+            "max_position_pct": config.max_position_pct,
+            "fixed_position_pct": config.fixed_position_pct,
         }
+
+    # --- 모의투자 (#1): 지금부터 실시간 누적되는 모의계좌 ---
+    @app.get("/api/paper")
+    def get_paper():  # noqa: ANN202
+        return paper.snapshot()
+
+    @app.post("/api/paper/step")
+    def step_paper():  # noqa: ANN202
+        """한 4H 사이클 전진 (대기 없이 즉시 실행 — 데모·수동 진행용)."""
+        result = paper.step()
+        snap = paper.snapshot()
+        snap["last_action"] = result.action
+        snap["last_reason"] = result.reason
+        return snap
+
+    @app.post("/api/paper/reset")
+    def reset_paper(starting_equity: float | None = None):  # noqa: ANN202
+        paper.reset(starting_equity)
+        return paper.snapshot()
 
     # --- 온디맨드 백테스트 (전략 개선 진단) ---
     @app.get("/api/backtest")
@@ -149,6 +175,23 @@ def create_app(config: Config | None = None):
         }
         d["equity_curve"] = report.equity_curve
         return d
+
+    # --- 기법 비교 (#2): 여러 전략 설정을 같은 기간으로 백테스트해 순위화 ---
+    @app.get("/api/compare")
+    def compare(bars: int = 1500):  # noqa: ANN202
+        from ..backtest.compare import PRESETS, compare_configs
+
+        bars = max(config.candle_count + 50, min(bars, 5000))
+        candles = provider.get_candles(bars)
+        ranked = compare_configs(candles, config, PRESETS)
+        return {
+            "period": {
+                "from": candles[0].datetime.isoformat(),
+                "to": candles[-1].datetime.isoformat(),
+                "bars": len(candles),
+            },
+            "results": ranked,
+        }
 
     return app
 

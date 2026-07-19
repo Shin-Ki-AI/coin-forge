@@ -31,6 +31,14 @@ DAILY_LOSS_LIMIT_PCT = 0.03   # 일일 손실 3% 초과 시 당일 거래 중단
 HARD_STOP_PCT = 0.03          # 비상 하드스탑 -3%
 MAX_POSITIONS = 1             # 최대 동시 포지션
 
+# --- 비중조절 / 포지션 사이징 (#3) --------------------------------------------
+SIZING_MODE_RISK = "risk"     # 1% 룰: 손절거리 기반 수량
+SIZING_MODE_FIXED = "fixed"   # 고정 비율: 자본의 일정 %를 주문금액으로
+# 1회 주문금액 상한 = 자본의 30%. 손절이 가까워도 100% 올인되지 않게 막는 핵심 안전장치.
+MAX_POSITION_PCT = 0.30
+# fixed 모드에서 사용할 주문금액 비율(자본 대비).
+FIXED_POSITION_PCT = 0.20
+
 # --- R-Multiple 청산 배수 (AGENTS.md §6) --------------------------------------
 PARTIAL_TAKE_R = 2.0          # 2R 도달 시 부분 익절
 PARTIAL_TAKE_RATIO = 0.5      # 부분 익절 비율 50%

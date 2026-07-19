@@ -43,14 +43,20 @@ class Orchestrator:
         notifier,
         risk_manager: Optional[RiskManager] = None,
         indicator_engine: Optional[IndicatorEngine] = None,
+        params=None,
     ) -> None:
+        from ..strategy.params import DEFAULT_PARAMS
+
         self.config = config
         self.candles = candle_provider
         self.exchange = exchange
         self.repo = repository
         self.notifier = notifier
         self.risk = risk_manager or RiskManager(config)
-        self.engine = indicator_engine or IndicatorEngine(min_candles=config.candle_count)
+        self.params = params or DEFAULT_PARAMS
+        self.engine = indicator_engine or IndicatorEngine(
+            min_candles=config.candle_count, params=self.params
+        )
 
     # --- 메인 사이클 ----------------------------------------------------------
     def run_cycle(self, now: Optional[datetime] = None) -> CycleResult:
@@ -78,7 +84,7 @@ class Orchestrator:
     def _handle_position(
         self, position: Position, ind: Indicators, now: datetime
     ) -> CycleResult:
-        res = evaluate_exit(position, ind)
+        res = evaluate_exit(position, ind, self.params)
         if res.action == ExitAction.HOLD:
             self._signal("hold", res.reason, ind.close)
             return CycleResult("hold", res.reason, ind.close)
@@ -136,7 +142,7 @@ class Orchestrator:
             self._signal("blocked", defense.reason, ind.close)
             return CycleResult("blocked", defense.reason, ind.close)
 
-        entry = evaluate_entry(state)
+        entry = evaluate_entry(state, self.params)
         if not entry.signal:
             self._signal("no_signal", entry.reason, ind.close)
             return CycleResult("hold", entry.reason, ind.close)

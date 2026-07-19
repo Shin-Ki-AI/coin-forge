@@ -71,6 +71,20 @@ class Config(BaseSettings):
     )
     hard_stop_pct: float = Field(default=constants.HARD_STOP_PCT, alias="HARD_STOP_PCT")
 
+    # --- 비중조절 (#3) ---
+    # 사이징 방식: risk(1% 룰) | fixed(고정 비율)
+    sizing_mode: str = Field(default=constants.SIZING_MODE_RISK, alias="SIZING_MODE")
+    # 1회 주문금액 상한(자본 대비). 100% 올인 방지. 1.0 이면 상한 없음.
+    max_position_pct: float = Field(default=constants.MAX_POSITION_PCT, alias="MAX_POSITION_PCT")
+    # fixed 모드에서 자본 대비 주문금액 비율.
+    fixed_position_pct: float = Field(
+        default=constants.FIXED_POSITION_PCT, alias="FIXED_POSITION_PCT"
+    )
+
+    # --- 모의투자 (#1) ---
+    # 모의계좌 상태 JSON 경로 (재시작해도 누적 유지).
+    paper_state_path: str = Field(default="paper_state.json", alias="PAPER_STATE_PATH")
+
     @property
     def is_live(self) -> bool:
         return self.trading_mode == TradingMode.LIVE

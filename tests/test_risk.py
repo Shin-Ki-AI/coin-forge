@@ -11,12 +11,15 @@ from coinforge.domain.indicators import Indicators
 from coinforge.risk import RiskManager, compute_stop_price
 
 
-def _cfg() -> Config:
-    return Config(
+def _cfg(**overrides) -> Config:
+    base = dict(
         RISK_PER_TRADE_PCT=0.01,
         DAILY_LOSS_LIMIT_PCT=0.03,
         HARD_STOP_PCT=0.03,
+        MAX_POSITION_PCT=1.0,  # 기존 테스트는 상한 없이 순수 공식 검증
     )
+    base.update(overrides)
+    return Config(**base)
 
 
 def _ind(close=10_000_000.0, sma60=9_800_000.0, senkou_a=9_700_000.0, senkou_b=9_600_000.0):
@@ -65,6 +68,35 @@ def test_sizing_capped_by_balance():
     # 수수료 여유를 남기고 잔고 이내로 축소 (fee_buffer=0.001)
     assert s.notional_krw <= 10_000_000
     assert s.notional_krw == pytest.approx(10_000_000 / 1.001, rel=1e-6)
+
+
+def test_max_position_cap_prevents_allin():
+    # 손절이 진입가 0.5% 이내로 가까우면 1% 룰 수량이 자본을 초과 → 상한(30%)으로 제한
+    rm = RiskManager(_cfg(MAX_POSITION_PCT=0.30))
+    ind = _ind(sma60=9_950_000.0)  # risk_per_unit = 50,000 (0.5%)
+    s = rm.compute_sizing(
+        entry_price=ind.close, ind=ind, equity_krw=100_000_000, available_krw=100_000_000
+    )
+    assert s.ok
+    assert s.equity_capped          # 비중 상한 발동
+    assert not s.balance_limited    # 잔고는 충분(상한이 먼저 물림)
+    assert s.notional_krw == pytest.approx(30_000_000)  # 자본의 30%
+    assert s.quantity == pytest.approx(3.0)             # 30M / 10M
+    # 상한 없었으면 20 BTC(200M, 200% 올인)였을 것
+    assert "비중 상한" in s.reason
+
+
+def test_fixed_fraction_mode():
+    # 고정 비율 모드: 손절거리와 무관하게 자본의 20%를 주문금액으로
+    rm = RiskManager(_cfg(SIZING_MODE="fixed", FIXED_POSITION_PCT=0.20))
+    ind = _ind()
+    s = rm.compute_sizing(
+        entry_price=ind.close, ind=ind, equity_krw=100_000_000, available_krw=100_000_000
+    )
+    assert s.ok
+    assert s.notional_krw == pytest.approx(20_000_000)  # 자본의 20%
+    assert s.quantity == pytest.approx(2.0)             # 20M / 10M
+    assert "고정 비율" in s.reason
 
 
 def test_sizing_rejects_zero_balance():
